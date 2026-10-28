@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "microban-sim"
+version = "0.1.0"
+description = "MuJoCo simulator of the Microban robot (classic or climbing version): its 19 servos (BAM), its sensors as the robot reads them, a fast step API"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "mujoco>=3.11,<4",          # tested with 3.11 and 3.16
+    "numpy>=1.26",
+    "better-actuator-models @ git+https://github.com/Rhoban/bam.git@e9a619d56da5236206f4de6ceec2c1ee1b497b5c",   # latest (2026-09-13)
+    "microban-model",           # the robot (Rhoban/microban_model, meshes in Git LFS), shared with microban
+]
+
+[tool.setuptools.packages.find]
+include = ["microban_sim*"]
+
+[tool.setuptools.package-data]
+microban_sim = ["poses/*.json"]
+
+[tool.uv.sources]
+microban-model = { git = "https://github.com/Rhoban/microban_model", lfs = true }
