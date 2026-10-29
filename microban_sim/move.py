@@ -1,18 +1,20 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Run a move, the same file as on the real robot (a file of microban's ``src/moves/``, branch dev_v2).
 
-A simple move is a class (no base class needed) with ``step(obs) -> targets`` (the 19 joint targets, rad, order
-``JOINTS``; None keeps the last ones), called every 20 ms with ``sim.observation()``, and optionally:
+A move is a class (no base class; its name ends with Move by convention) with ``step(obs) -> targets``, called every
+20 ms with ``sim.observation()``. ``targets``: the 19 joint targets (rad, order ``JOINTS``), or ``{joint: angle}`` for
+some joints (the others keep their last target); ``None``: the move is over. Optionally:
 
-* ``reset(obs)``: called when it starts;
-* ``kp_fw``: the servos' gain while it runs (125 by default, as the robot runs learned policies);
-* ``options = {name: value}`` (int / float / bool): variables the robot's dashboard edits live, read as
-  ``self.options[name]``; ``option_docs = {name: "..."}``;
-* ``sliders = {name: (min, max, start)}``: shown while it runs, read as ``self.slider[name]``;
-* ``keys = "..."``: the keys it reads (``self.pressed``: the set of held keys; ``on_key(key, down)``);
-* ``description``, ``variants`` (the robot versions it is for: "classic", "climber").
+* ``start(obs)``: called when it starts; ``stopping(obs)``: called every 20 ms once it is over or stopped, returns
+  targets until it returns None (a smooth stop);
+* ``kp``: the servos' gain while it runs (default: the simulator's, ``kp_fw``; the robot's program: 400);
+* ``options = {name: value}`` (int / float / bool), read as ``self.options[name]``, edited live in the robot's
+  dashboard; ``option_docs``; ``sliders = {name: (min, max, start)}``, read as ``self.slider[name]``; ``keys`` and
+  ``on_key(key, down)``, ``self.pressed`` (the keys held); ``self.velocity`` (the sticks / arrows: vx, vy, vtheta);
+* ``description``, ``variants`` ("classic", "climber"), ``start_pose`` ("current" or "neutral": on the robot only).
 
-In the simulator nobody edits options, sliders or keys: :func:`run_move` gives them their defaults.
+In the simulator nobody edits options and sliders, no key is pressed and the velocity is zero: :func:`run_move`
+gives them their defaults.
 """
 import importlib.util
 import inspect
@@ -20,11 +22,15 @@ import re
 import sys
 from pathlib import Path
 
-KP_MOVE = 125.0
+import numpy as np
+
+from .scene import JOINTS
+
+STOPPING_MAX_S = 10.0             # a stopping() that never returns None is cut after this
 
 
 def _give_defaults(move) -> None:
-    """What the robot's dashboard sets on a move, at its defaults: ``options``, ``slider``, ``pressed``."""
+    """What the robot's program sets on a move, at its defaults: options, slider, pressed, velocity."""
     cls_options = getattr(type(move), "options", None)
     if isinstance(cls_options, dict) and "options" not in vars(move):
         move.options = dict(cls_options)
@@ -32,28 +38,56 @@ def _give_defaults(move) -> None:
         move.slider = {n: float(v[2]) for n, v in (getattr(move, "sliders", None) or {}).items()}
     if not hasattr(move, "pressed"):
         move.pressed = set()
+    if not hasattr(move, "velocity"):
+        move.velocity = {"vx": 0.0, "vy": 0.0, "vtheta": 0.0}
+
+
+def _apply(targets, last: np.ndarray) -> np.ndarray:
+    """The move's targets over the last ones: 19 angles, or a dict of some joints."""
+    if isinstance(targets, dict):
+        out = last.copy()
+        for name, angle in targets.items():
+            out[JOINTS.index(name)] = angle
+        return out
+    targets = np.asarray(targets, float)
+    if targets.shape != (len(JOINTS),):
+        raise ValueError(f"step must return {len(JOINTS)} targets (order JOINTS) or a dict, got shape {targets.shape}")
+    return targets
 
 
 def run_move(move, sim, seconds: float, on_step=None) -> dict:
-    """Run ``move`` on ``sim`` (a :class:`microban_sim.MicrobanSim`, or the hackathon's ClimbingSim) for
-    ``seconds`` of simulated time, from where the robot is (as on the robot, where the torque goes on where the robot
-    is when it starts). Its options and sliders keep their defaults, no key is pressed. ``on_step(sim, obs)``, if
-    given, is called after every step (to watch, log or stop: return True to stop). Returns the last observation."""
+    """Run ``move`` on ``sim`` (a :class:`microban_sim.MicrobanSim`, or the hackathon's ClimbingSim) for at most
+    ``seconds`` of simulated time, from where the robot is (as on the robot when the torque goes on there), then its
+    ``stopping`` if it has one. ``on_step(sim, obs)``, if given, is called after every step (to watch, log or stop:
+    return True to stop). Returns the last observation; the servos' gain is the simulator's again after."""
     _give_defaults(move)
-    sim.servos.kp = float(getattr(move, "kp_fw", KP_MOVE))
+    kp = sim.servos.kp
+    if getattr(move, "kp", None) is not None:
+        sim.servos.kp = float(move.kp)
     sim.set_torque(True)
     obs = sim.observation()
-    if hasattr(move, "reset"):
-        move.reset(obs)
-    for _ in range(int(round(seconds / sim.control_dt))):
-        obs = sim.step(move.step(obs))
-        if on_step is not None and on_step(sim, obs):
-            break
+    last = obs["q"].copy()
+    if callable(getattr(move, "start", None)):
+        move.start(obs)
+    try:
+        for _ in range(int(round(seconds / sim.control_dt))):
+            targets = move.step(obs)
+            if targets is None:
+                break
+            last = _apply(targets, last)
+            obs = sim.step(last)
+            if on_step is not None and on_step(sim, obs):
+                break
+        stopping = getattr(move, "stopping", None)
+        for _ in range(int(round(STOPPING_MAX_S / sim.control_dt)) if callable(stopping) else 0):
+            targets = stopping(obs)
+            if targets is None:
+                break
+            last = _apply(targets, last)
+            obs = sim.step(last)
+    finally:
+        sim.servos.kp = kp
     return obs
-
-
-run_controller = run_move
-"""The old name of :func:`run_move` (a move used to be called a Controller)."""
 
 
 def _move_name(cls) -> str:
