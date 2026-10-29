@@ -11,7 +11,7 @@ from microban_sim import MicrobanSim, JOINTS
 sim = MicrobanSim("classic")             # or "climber": the climbing forearms and feet
 obs = sim.reset()                        # standing on the floor, in the walking robot's standing pose
 for t in range(500):                     # 500 x 20 ms = 10 s of simulated time, in about 0.5 s
-    target = obs["q"]                    # your controller: 19 joint angles (rad), order JOINTS
+    target = obs["q"]                    # your move: 19 joint angles (rad), order JOINTS
     obs = sim.step(target)
 ```
 
@@ -40,7 +40,8 @@ Install: `uv add git+https://github.com/Rhoban/microban_sim` (Python 3.12+), or 
 | `sim.site_positions_at(q, sites, ...)`, `sim.joint_angles_for({site: xyz}, trunk_pos, trunk_quat)` | forward and inverse kinematics, the simulation untouched |
 | `state = sim.get_state()`, `sim.set_state(state)` | try a motion and come back: the same steps give exactly the same motion |
 | `sim.render(camera)`, `sim.view()` | an image; MuJoCo's viewer on the running simulation |
-| `run_controller(controller, sim, seconds)` | a class with `step(obs) -> targets`, the same file runs on the robot (`make run CONTROLLER=...`) |
+| `run_move(move, sim, seconds)` | a move: a class with `step(obs) -> targets`, the same file as on the robot (a file of microban's `src/moves/`); its options and sliders at their defaults (`run_controller`: the old name) |
+| `load_moves(path)` | `{name: move}`, every move class of a Python file (`WaveMove` -> `"wave"`) |
 
 ## What is simulated
 
@@ -64,7 +65,7 @@ microban_sim/
   scene.py        build_spec(variant): the robot on a floor, as an MjSpec to extend
   servos.py       Servos: the XL330 simulated by BAM
   sim.py          MicrobanSim: step, observation (with the robot's delays), kinematics, state, render, view
-  controller.py   run_controller
+  move.py         run_move, load_moves
   poses/          the standing pose
 examples/         stand.py
 ```
