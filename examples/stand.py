@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 """The robot standing, then turning its head, in MuJoCo's viewer (close the window to stop).
 
     uv run python examples/stand.py [classic|climber]

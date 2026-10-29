@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 """The MuJoCo scene: the robot from microban_model (classic or climbing version) on a floor, with lights.
 
 :class:`microban_sim.MicrobanSim` builds it for you; :func:`build_spec` gives it as a ``mujoco.MjSpec`` to add your own

@@ -5,6 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "microban-sim"
 version = "0.1.0"
+license = "GPL-3.0-or-later"
 description = "MuJoCo simulator of the Microban robot (classic or climbing version): its 19 servos (BAM), its sensors as the robot reads them, a fast step API"
 readme = "README.md"
 requires-python = ">=3.12"

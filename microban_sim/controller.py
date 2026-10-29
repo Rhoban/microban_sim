@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Run a controller, the same file as on the real robot (microban: ``make run CONTROLLER=my_controller.py``).
 
 A controller is a class with ``step(obs) -> targets`` (the 19 joint targets, rad, order ``JOINTS``; None keeps the

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 """The simulator: physics at 500 Hz, the 19 XL330 servos simulated by BAM, the robot's sensors as it reads them.
 
     from microban_sim import MicrobanSim

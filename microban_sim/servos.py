@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 """The 19 Dynamixel XL330 servos, simulated by BAM (Rhoban's better-actuator-models) as identified on the bench."""
 from __future__ import annotations
 

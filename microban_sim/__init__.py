@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 """MuJoCo simulator of the Microban robot (classic or climbing version): its servos, its sensors, a fast step API."""
 from .scene import JOINTS, VARIANTS, build_spec
 from .servos import Servos

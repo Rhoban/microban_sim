@@ -68,3 +68,7 @@ microban_sim/
   poses/          the standing pose
 examples/         stand.py
 ```
+
+## License
+
+GPL-3.0-or-later (LICENSE), as the software of [microban](https://github.com/Rhoban/microban).
