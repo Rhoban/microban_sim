@@ -40,7 +40,7 @@ Install: `uv add git+https://github.com/Rhoban/microban_sim` (Python 3.12+), or 
 | `sim.site_positions_at(q, sites, ...)`, `sim.joint_angles_for({site: xyz}, trunk_pos, trunk_quat)` | forward and inverse kinematics, the simulation untouched |
 | `state = sim.get_state()`, `sim.set_state(state)` | try a motion and come back: the same steps give exactly the same motion |
 | `sim.render(camera)`, `sim.view()` | an image; MuJoCo's viewer on the running simulation |
-| `run_move(move, sim, seconds)` | a move: a class with `step(obs) -> targets` (19 angles, or `{joint: angle}`; `None`: over), the same file as on the robot (a file of microban's `src/moves/`); then its `stopping`; its options at their defaults, its sliders at their start values (at each run), its `kp` while it runs; it starts where the robot is (`start_pose` is the robot program's) |
+| `run_move(move, sim, seconds)` | a move: a class with `step(obs) -> targets` (19 angles, or `{joint: angle}`; `None`: over), the same file as on the robot (a file of microban's `src/moves/`); then its `stopping`; its options at their defaults, its sliders at their start values (at each run), its `kp` while it runs; it starts where the robot is (`start_pose` is the robot program's); `self.robot`: `set_torque(on, joints)`, `set_kp(kp)` as on the robot |
 | `load_moves(path)` | `{name: move}`, every move class of a Python file (`WaveMove` -> `"wave"`, `IKSquatMove` -> `"ik_squat"`, as on the robot); the file's folder on the path (it imports its own files by name); a file that does not load gives `{}`, its error printed |
 
 ## What is simulated

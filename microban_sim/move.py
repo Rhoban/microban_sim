@@ -12,6 +12,8 @@ some joints (the others keep their last target); ``None``: the move is over. Opt
   dashboard; ``option_docs``; ``sliders = {name: (min, max, start)}``, read as ``self.slider[name]``; ``keys`` and
   ``on_key(key, down)``, ``self.pressed`` (the keys held); ``self.velocity`` (the sticks / arrows: vx, vy, vtheta);
 * ``description``, ``variants`` ("classic", "climber"), ``start_pose`` ("current" or "neutral": on the robot only).
+* ``self.robot``: the servos one by one, for the moves that need more (:class:`SimRobot`, as on the robot):
+  ``set_torque(on, joints)``, ``set_kp(kp)``.
 
 In the simulator nobody edits options and sliders, no key is pressed and the velocity is zero: :func:`run_move`
 gives them their defaults.
@@ -38,6 +40,52 @@ def _give_defaults(move) -> None:
     move.slider = {n: float(v[2]) for n, v in (getattr(move, "sliders", None) or {}).items()}
     move.pressed = set()
     move.velocity = {"vx": 0.0, "vy": 0.0, "vtheta": 0.0}
+    move.robot = SimRobot(move.robot.sim if isinstance(getattr(move, "robot", None), SimRobot) else None)
+
+
+class SimRobot:
+    """``self.robot`` of a move in the simulator, as on the robot (microban's moves/move.py Robot): ``set_kp(kp)`` (every
+    joint at once: the simulated servos share one gain), ``set_torque(on, joints=None)`` (a joint goes limp at once;
+    back on after this step's targets, held where it is). ``state`` is None (the robot's raw measurements); ``sim`` is
+    the simulator."""
+
+    def __init__(self, sim) -> None:
+        self.sim, self.state = sim, None
+        self.to_enable: set[int] = set()
+
+    @staticmethod
+    def _index(joints) -> list[int]:
+        names = list(JOINTS) if joints is None else [joints] if isinstance(joints, str) else list(joints)
+        unknown = set(names) - set(JOINTS)
+        if unknown:
+            raise ValueError(f"unknown joints {sorted(unknown)} (JOINTS)")
+        return [JOINTS.index(n) for n in names]
+
+    def set_kp(self, kp, joints=None) -> None:
+        if joints is not None and sorted(self._index(joints)) != list(range(len(JOINTS))):
+            raise NotImplementedError("the simulated servos share one gain: set_kp(kp) for every joint (per joint on "
+                                      "the robot only)")
+        self.sim.servos.kp = float(kp)
+
+    def set_torque(self, on: bool, joints=None) -> None:
+        idx = self._index(joints)
+        if on:
+            self.to_enable |= {i for i in idx if not self.sim.servos.torque[i]}
+        else:
+            self.sim.servos.torque[idx] = False
+            self.to_enable -= set(idx)
+
+
+def _step(sim, robot: SimRobot, last: np.ndarray, obs: dict) -> dict:
+    """One step with these targets; a joint turned back on this step is held where it is, then powered."""
+    if robot.to_enable:
+        idx = sorted(robot.to_enable)
+        last[idx] = obs["q"][idx]
+    obs = sim.step(last)
+    if robot.to_enable:
+        sim.servos.torque[sorted(robot.to_enable)] = True
+        robot.to_enable.clear()
+    return obs
 
 
 def _apply(targets, last: np.ndarray) -> np.ndarray:
@@ -59,6 +107,7 @@ def run_move(move, sim, seconds: float, on_step=None) -> dict:
     ``stopping`` if it has one. ``on_step(sim, obs)``, if given, is called after every step (to watch, log or stop:
     return True to stop). Returns the last observation; the servos' gain is the simulator's again after."""
     _give_defaults(move)
+    move.robot.sim = sim
     kp = sim.servos.kp
     if getattr(move, "kp", None) is not None:
         sim.servos.kp = float(move.kp)
@@ -73,7 +122,7 @@ def run_move(move, sim, seconds: float, on_step=None) -> dict:
             if targets is None:
                 break
             last = _apply(targets, last)
-            obs = sim.step(last)
+            obs = _step(sim, move.robot, last, obs)
             if on_step is not None and on_step(sim, obs):
                 break
         stopping = getattr(move, "stopping", None)
@@ -82,9 +131,10 @@ def run_move(move, sim, seconds: float, on_step=None) -> dict:
             if targets is None:
                 break
             last = _apply(targets, last)
-            obs = sim.step(last)
+            obs = _step(sim, move.robot, last, obs)
     finally:
         sim.servos.kp = kp
+        sim.set_torque(True)                       # the joints it left limp: back on, as on the robot
     return obs
 
 
