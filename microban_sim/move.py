@@ -52,7 +52,7 @@ class SimRobot:
     the simulator."""
 
     def __init__(self, sim) -> None:
-        self.sim, self.state = sim, None
+        self.sim, self.state, self.variant = sim, None, None     # (the robot's raw state and version: robot only)
         self.to_enable: set[int] = set()
         self.kp: list[int] | None = None
         self._warned = False
