@@ -22,7 +22,7 @@ Install: `uv add git+https://github.com/Rhoban/microban_sim` (Python 3.12+), or 
 * **Fast**, in Python: `sim.step(target)` simulates 20 ms as fast as it computes (about 1 ms on a laptop), no window
   (`sim.view()` opens MuJoCo's viewer on it). For planning, learning, evaluating: save and restore a state, many
   processes in parallel.
-* **As on the robot**: the robot's own program (its scheduler, moves, keyboard, gamepad, live dashboard) runs on this
+* **As on the robot**: the robot's own program (its scheduler, moves, keys in the viewer, live dashboard) runs on this
   simulator, in real time: `make sim` in the [microban](https://github.com/Rhoban/microban) repository (branch
   `dev_v2`). What you test there is what `make deploy` sends to the robot.
 
@@ -40,8 +40,8 @@ Install: `uv add git+https://github.com/Rhoban/microban_sim` (Python 3.12+), or 
 | `sim.site_positions_at(q, sites, ...)`, `sim.joint_angles_for({site: xyz}, trunk_pos, trunk_quat)` | forward and inverse kinematics, the simulation untouched |
 | `state = sim.get_state()`, `sim.set_state(state)` | try a motion and come back: the same steps give exactly the same motion |
 | `sim.render(camera)`, `sim.view()` | an image; MuJoCo's viewer on the running simulation |
-| `run_move(move, sim, seconds)` | a move: a class with `step(obs) -> targets` (19 angles, or `{joint: angle}`; `None`: over), the same file as on the robot (a file of microban's `src/moves/`); then its `stopping`; its options and sliders at their defaults, its `kp` while it runs |
-| `load_moves(path)` | `{name: move}`, every move class of a Python file (`WaveMove` -> `"wave"`) |
+| `run_move(move, sim, seconds)` | a move: a class with `step(obs) -> targets` (19 angles, or `{joint: angle}`; `None`: over), the same file as on the robot (a file of microban's `src/moves/`); then its `stopping`; its options at their defaults, its sliders at their start values (at each run), its `kp` while it runs; it starts where the robot is (`start_pose` is the robot program's) |
+| `load_moves(path)` | `{name: move}`, every move class of a Python file (`WaveMove` -> `"wave"`, `IKSquatMove` -> `"ik_squat"`, as on the robot); the file's folder on the path (it imports its own files by name); a file that does not load gives `{}`, its error printed |
 
 ## What is simulated
 

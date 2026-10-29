@@ -20,6 +20,7 @@ import importlib.util
 import inspect
 import re
 import sys
+import traceback
 from pathlib import Path
 
 import numpy as np
@@ -30,16 +31,13 @@ STOPPING_MAX_S = 10.0             # a stopping() that never returns None is cut 
 
 
 def _give_defaults(move) -> None:
-    """What the robot's program sets on a move, at its defaults: options, slider, pressed, velocity."""
-    cls_options = getattr(type(move), "options", None)
-    if isinstance(cls_options, dict) and "options" not in vars(move):
-        move.options = dict(cls_options)
-    if not hasattr(move, "slider"):
-        move.slider = {n: float(v[2]) for n, v in (getattr(move, "sliders", None) or {}).items()}
-    if not hasattr(move, "pressed"):
-        move.pressed = set()
-    if not hasattr(move, "velocity"):
-        move.velocity = {"vx": 0.0, "vy": 0.0, "vtheta": 0.0}
+    """What the robot's program sets on a move at its launch: its options (kept from one run to the next, {} when it
+    has none), its sliders back to their start values, no key held, no velocity asked."""
+    if "options" not in vars(move):
+        move.options = dict(getattr(move, "options", None) or {})
+    move.slider = {n: float(v[2]) for n, v in (getattr(move, "sliders", None) or {}).items()}
+    move.pressed = set()
+    move.velocity = {"vx": 0.0, "vy": 0.0, "vtheta": 0.0}
 
 
 def _apply(targets, last: np.ndarray) -> np.ndarray:
@@ -115,15 +113,23 @@ def load_moves(path) -> dict:
     """Import the Python file ``path`` (a move file, as in microban's ``src/moves/``) and return ``{name: move}``, one
     instance of every class defined in that file with a ``step(self, obs)`` method (and not abstract). ``name``: the
     class's ``name`` attribute if it sets one, else the class name without its trailing "Move", in snake_case
-    (``WaveMove`` -> ``"wave"``). A class that fails to build is skipped, with a message."""
+    (``WaveMove`` -> ``"wave"``, ``IKSquatMove`` -> ``"ik_squat"``). As on the robot: the file's folder is on the path
+    (it imports its own files by name), a file that fails to import gives ``{}`` and a class that fails to build is
+    skipped, each with its error printed."""
     path = Path(path).resolve()
+    if str(path.parent) not in sys.path:
+        sys.path.append(str(path.parent))
     module_name = "microban_moves_" + re.sub(r"\W", "_", path.stem)
     spec = importlib.util.spec_from_file_location(module_name, path)
     if spec is None or spec.loader is None:
         raise ImportError(f"cannot import {path}")
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
-    spec.loader.exec_module(module)
+    try:
+        spec.loader.exec_module(module)
+    except Exception:  # noqa: BLE001 - as the robot: the file is skipped, the error shown
+        print(f"load_moves: {path.name} skipped (it does not load):\n{traceback.format_exc()}")
+        return {}
     moves = {}
     for _, cls in inspect.getmembers(module, inspect.isclass):
         if cls.__module__ != module_name or not _is_move(cls):
