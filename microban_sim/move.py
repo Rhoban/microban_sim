@@ -40,7 +40,9 @@ def _give_defaults(move) -> None:
     move.slider = {n: float(v[2]) for n, v in (getattr(move, "sliders", None) or {}).items()}
     move.pressed = set()
     move.velocity = {"vx": 0.0, "vy": 0.0, "vtheta": 0.0}
-    move.robot = SimRobot(move.robot.sim if isinstance(getattr(move, "robot", None), SimRobot) else None)
+    if "robot" in vars(move) and not isinstance(move.robot, SimRobot):
+        raise ValueError("self.robot is the program's (the servos one by one): name yours differently (e.g. self.model)")
+    move.robot = SimRobot(None)
 
 
 class SimRobot:
@@ -52,6 +54,8 @@ class SimRobot:
     def __init__(self, sim) -> None:
         self.sim, self.state = sim, None
         self.to_enable: set[int] = set()
+        self.kp: list[int] | None = None
+        self._warned = False
 
     @staticmethod
     def _index(joints) -> list[int]:
@@ -62,10 +66,19 @@ class SimRobot:
         return [JOINTS.index(n) for n in names]
 
     def set_kp(self, kp, joints=None) -> None:
-        if joints is not None and sorted(self._index(joints)) != list(range(len(JOINTS))):
-            raise NotImplementedError("the simulated servos share one gain: set_kp(kp) for every joint (per joint on "
-                                      "the robot only)")
-        self.sim.servos.kp = float(kp)
+        """The simulated servos share one gain: the one most joints have (per joint on the robot only)."""
+        kp = int(kp)
+        if not 0 <= kp <= 1000:
+            raise ValueError(f"kp {kp}: the servos take 0 to 1000 (the robot runs 400, learned policies 125)")
+        if self.kp is None:
+            self.kp = [int(self.sim.servos.kp)] * len(JOINTS)
+        for i in self._index(joints):
+            self.kp[i] = kp
+        self.sim.servos.kp = float(max(set(self.kp), key=self.kp.count))
+        if len(set(self.kp)) > 1 and not self._warned:
+            print(f"run_move: per-joint servo gains are the robot's only; the simulated servos keep one gain "
+                  f"({self.sim.servos.kp:g})")
+            self._warned = True
 
     def set_torque(self, on: bool, joints=None) -> None:
         idx = self._index(joints)
@@ -114,9 +127,9 @@ def run_move(move, sim, seconds: float, on_step=None) -> dict:
     sim.set_torque(True)
     obs = sim.observation()
     last = obs["q"].copy()
-    if callable(getattr(move, "start", None)):
-        move.start(obs)
     try:
+        if callable(getattr(move, "start", None)):
+            move.start(obs)
         for _ in range(int(round(seconds / sim.control_dt))):
             targets = move.step(obs)
             if targets is None:
